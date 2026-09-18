@@ -1,4 +1,4 @@
-/* Archway Paper Analyzer — asks a model for one strict JSON object describing a
+/* Archway Paper Analyzer \u2014 asks a model for one strict JSON object describing a
  * passage of academic writing, then renders it. Owns the prompt, the defensive
  * parse, and the DOM. Everything about keys, models and HTTP lives in archway.js. */
 (function () {
@@ -46,7 +46,7 @@
     '- "limitations": 2 to 6 weaknesses, whether acknowledged by the authors or following directly ' +
       "from the design as described.",
     '- "unsaid": 3 to 6 things a careful reader would expect this passage to state and it ' +
-      "conspicuously does not — a missing control or baseline, absent confidence intervals or " +
+      "conspicuously does not \u2014 a missing control or baseline, absent confidence intervals or " +
       "effect sizes, unreported attrition, no external validation or replication, single site, " +
       "self-reported outcomes, unstated funding or conflicts, no preregistration. Each item must " +
       "be specific to this passage, not generic advice.",
@@ -79,7 +79,7 @@
   var modelsReady = false;
   var busy = false;
 
-  var sampleBadge = Archway.el("span", "badge badge--warn hidden", "Sample text — fabricated study");
+  var sampleBadge = Archway.el("span", "badge badge--warn hidden", "Sample text \u2014 fabricated study");
   sampleBadge.title = "This abstract was written for the demo. It describes no real research.";
   loadBtn.parentNode.insertBefore(sampleBadge, loadBtn);
 
@@ -95,12 +95,12 @@
     var long = text.length > 60000;
     var line =
       Archway.formatInt(text.length) +
-      " characters · " +
+      " characters \u00b7 " +
       Archway.formatInt(words) +
-      " words · ~" +
+      " words \u00b7 ~" +
       Archway.formatInt(Math.ceil(text.length / 4)) +
       " tokens";
-    if (long) line += " · long enough to risk the context window";
+    if (long) line += " \u00b7 long enough to risk the context window";
     countLine.textContent = line;
     // The count stays grey until it is news, at which point it is the only
     // coloured thing on the composer.
@@ -168,7 +168,7 @@
   }
 
   function loadModels() {
-    statusLine.textContent = "Loading models…";
+    statusLine.textContent = "Loading models\u2026";
     return Archway.listModels()
       .then(function (models) {
         if (!models.length) {
@@ -305,7 +305,7 @@
     var line = Archway.el("div", "row row--tight");
     line.appendChild(Archway.el("span", "spinner"));
     line.appendChild(
-      Archway.el("span", "small muted", "Reading the passage and building the report…")
+      Archway.el("span", "small muted", "Reading the passage and building the report\u2026")
     );
     card.appendChild(line);
 
@@ -449,7 +449,7 @@
         badge: analysis.unsaid.length ? omissionBadge(analysis.unsaid.length) : null,
         note:
           "Expected of a passage like this one, and absent from it. An omission is not proof of " +
-          "a flaw — it is a question to take to the full text.",
+          "a flaw \u2014 it is a question to take to the full text.",
       })
     );
 
@@ -471,7 +471,7 @@
       Archway.el(
         "p",
         "card__note",
-        "Nothing was lost — the text below is the complete reply. Running it again usually " +
+        "Nothing was lost \u2014 the text below is the complete reply. Running it again usually " +
           "produces valid JSON."
       )
     );
@@ -495,7 +495,7 @@
 
   function toMarkdown(analysis, modelId) {
     var out = "# Paper analysis\n\n";
-    out += "Model: `" + modelId + "` · via the NYU Archway\n\n";
+    out += "Model: `" + modelId + "` \u00b7 via the NYU Archway\n\n";
     out += "## Central claim\n\n" + (analysis.claim || "_not stated_") + "\n\n";
     out += "## Method\n\n" + (analysis.method || "_not stated_") + "\n\n";
     out += "## Sample\n\n" + (analysis.sample || "_not stated_") + "\n\n";
@@ -506,7 +506,7 @@
     out += analysis.jargon.length
       ? analysis.jargon
           .map(function (entry) {
-            return "- **" + entry.term + "** — " + entry.plain;
+            return "- **" + entry.term + "** \u2014 " + entry.plain;
           })
           .join("\n") + "\n"
       : "_none flagged_\n";
@@ -519,7 +519,7 @@
     return (
       "# Paper analysis (unparsed)\n\nModel: `" +
       modelId +
-      "` · via the NYU Archway\n\nThe reply was not valid JSON. Verbatim:\n\n````\n" +
+      "` \u00b7 via the NYU Archway\n\nThe reply was not valid JSON. Verbatim:\n\n````\n" +
       text +
       "\n````\n"
     );
@@ -589,7 +589,7 @@
   function analyze() {
     var text = sourceBox.value.trim();
     if (text.length < 80) {
-      statusLine.textContent = "Paste an abstract first — at least a couple of sentences.";
+      statusLine.textContent = "Paste an abstract first \u2014 at least a couple of sentences.";
       sourceBox.focus();
       return;
     }
@@ -599,7 +599,7 @@
     Archway.renderReadout(readoutBox, null);
     showPending();
     // The button and the pending card both already say it is working; a third
-    // "Analyzing…" beside them is noise, not reassurance.
+    // "Analyzing\u2026" beside them is noise, not reassurance.
     statusLine.textContent = "";
 
     controller = new AbortController();
@@ -623,11 +623,11 @@
           markdown = toMarkdown(analysis, modelId);
           render(analysis, modelId);
           statusLine.textContent =
-            result.finishReason === "length" ? "Stopped at the output limit — may be truncated." : "";
+            result.finishReason === "length" ? "Stopped at the output limit \u2014 may be truncated." : "";
         } else {
           markdown = rawMarkdown(result.text, modelId);
           renderRaw(result.text, modelId);
-          statusLine.textContent = "The reply was not usable JSON — showing it verbatim.";
+          statusLine.textContent = "The reply was not usable JSON \u2014 showing it verbatim.";
         }
       })
       .catch(function (err) {

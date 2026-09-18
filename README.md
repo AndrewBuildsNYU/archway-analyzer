@@ -1,7 +1,7 @@
-﻿# Archway Paper Analyzer
+# Archway Paper Analyzer
 
 Paste an abstract or a section of a paper and get a structured critical breakdown:
-claim, method, sample, findings, limitations, jargon â€” and the things the passage
+claim, method, sample, findings, limitations, jargon — and the things the passage
 conspicuously does not say.
 
 It is an example app for the **NYU Archway**, the university's API gateway in front of
@@ -32,7 +32,7 @@ cd archway-analyzer
 ```
 
 Then open `index.html` in a browser. There is no build step, no package manager, and
-nothing to install â€” it is three files and two shared ones.
+nothing to install — it is three files and two shared ones.
 
 Pointing the app at a *different* Archway (the `BASE_URL` constant in `assets/archway.js`,
 deliberately not a field in the UI) needs
@@ -49,7 +49,7 @@ that assumes it will not get it.
 The prompt names the schema field by field and ends with "return the JSON object and
 nothing else". Models mostly comply. Mostly is not a contract, so `parseAnalysis()` in
 `assets/app.js` tries three candidates in order: the whole reply, the contents of a
-` ```json ` fence if one is there, and the outermost `{ â€¦ }` span if the model wrapped
+` ```json ` fence if one is there, and the outermost `{ … }` span if the model wrapped
 its answer in prose. If all three fail, the app shows the complete raw reply in a `<pre>`
 with a notice instead of throwing away the response or crashing the page.
 
@@ -57,7 +57,7 @@ The call is non-streaming on purpose. There is nothing to show until the whole o
 arrived, so `Archway.chat()` is the right tool and `Archway.streamChat()` is not.
 
 The `unsaid` field is the part worth stealing. It asks what a careful reader would expect
-the passage to state and it does not â€” a missing control group, absent confidence
+the passage to state and it does not — a missing control group, absent confidence
 intervals, unreported attrition, no funding statement. Absence is hard to notice by
 reading and easy to ask for explicitly, which is most of why the section exists.
 
