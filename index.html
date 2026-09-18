@@ -1,0 +1,192 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archway Paper Analyzer Â· NYU Archway</title>
+<meta name="description" content="Paste an abstract or a paper section and get a structured critical breakdown, including what the text conspicuously does not say.">
+<link rel="stylesheet" href="assets/archway.css">
+<script>
+  // Pre-paint theme stamp: avoids a light flash for dark-mode users. Inline on
+  // purpose and safe here â€” GitHub Pages sets no CSP. (The Archway's own pages
+  // cannot do this; script-src 'self' blocks it.)
+  try {
+    var t = localStorage.getItem("nyu-archway:theme");
+    if (t) document.documentElement.setAttribute("data-theme", t);
+  } catch (e) {}
+</script>
+<style>
+  /* Layout rules this app needs on top of the design system. */
+  #source {
+    min-height: 15rem;
+    font-size: var(--fs-sm);
+  }
+
+  .count {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .prose {
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  .controls {
+    margin-top: var(--sp-4);
+  }
+
+  .controls .field {
+    flex: 1 1 16rem;
+  }
+
+  .analysis-list {
+    margin: 0;
+    padding-left: 1.15rem;
+    line-height: 1.55;
+  }
+
+  .analysis-list li + li {
+    margin-top: var(--sp-2);
+  }
+
+  /* The point of the app: what the abstract leaves out gets its own colour. */
+  .card--unsaid {
+    border-color: var(--warning);
+  }
+
+  .gloss {
+    margin: 0;
+  }
+
+  .gloss dt {
+    font-weight: 650;
+    font-size: var(--fs-sm);
+  }
+
+  .gloss dd {
+    margin: var(--sp-1) 0 var(--sp-3) 0;
+    color: var(--ink-2);
+    font-size: var(--fs-sm);
+    line-height: 1.55;
+  }
+
+  .gloss dd:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Separates these from a preceding note, which carries no margin of its own.
+     Compound selectors on purpose: .analysis-list, .raw and .field__hint each
+     reset `margin`, and at equal specificity the later rule would win. */
+  .analysis-list.after-note,
+  .raw.after-note,
+  .field__hint.after-note {
+    margin-top: var(--sp-3);
+  }
+
+  .raw {
+    margin: 0;
+    padding: var(--sp-3);
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 26rem;
+    overflow-y: auto;
+  }
+
+  #results:focus {
+    outline: none;
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <span class="topbar__mark">NYU</span>
+    <span class="topbar__title">
+      <strong>Archway Paper Analyzer</strong>
+      <span>NYU Archway example</span>
+    </span>
+    <button type="button" class="btn btn--sm btn--ghost" id="theme-toggle">Dark mode</button>
+    <a class="btn btn--sm" href="https://github.com/AndrewBuildsNYU/archway-analyzer">Source</a>
+  </header>
+
+  <h1 class="sr-only">Archway Paper Analyzer</h1>
+
+  <p class="lede">
+    Paste an abstract or a section of a paper and get a structured critical breakdown â€” claim,
+    method, findings, limitations, and the things a careful reader would expect it to state and
+    it does not. Demonstrates strict structured output and long-context handling through the Archway.
+  </p>
+
+  <div id="key-mount"></div>
+
+  <main id="app">
+    <div class="stack">
+
+      <section class="card">
+        <div class="card__head">
+          <h3>Abstract or section</h3>
+          <button type="button" class="btn btn--sm btn--ghost" id="load-example" disabled>
+            Load an example abstract
+          </button>
+        </div>
+
+        <div class="field">
+          <label for="source">Text to analyze</label>
+          <textarea id="source" disabled
+            placeholder="Paste an abstract, an introduction, or a results section."
+            aria-describedby="source-count"></textarea>
+          <p class="field__hint count" id="source-count">0 characters Â· 0 words</p>
+        </div>
+
+        <div class="row controls">
+          <div class="field">
+            <label for="model">Model</label>
+            <select id="model" disabled>
+              <option>Connect a key to load models</option>
+            </select>
+          </div>
+          <button type="button" class="btn btn--primary" id="analyze" disabled>Analyze</button>
+          <button type="button" class="btn btn--danger hidden" id="cancel">Cancel</button>
+          <span class="small muted" id="status" role="status"></span>
+        </div>
+
+        <p class="field__hint after-note">
+          Press <span class="mono">Ctrl</span> + <span class="mono">Enter</span> in the box to analyze.
+          Longer sections need a model with a large context window.
+        </p>
+      </section>
+
+      <div id="error"></div>
+      <div id="readout" class="readout hidden"></div>
+
+      <section id="results" class="stack" tabindex="-1" aria-live="polite" aria-busy="false">
+        <div class="card">
+          <p class="empty">No analysis yet. Paste some text, or load the sample abstract.</p>
+        </div>
+      </section>
+
+      <p class="card__note">
+        A reading aid, not a substitute for reading the paper. A language model can misread a
+        method, miss a caveat that is stated, or invent one that is not â€” verify anything you
+        would cite against the full text.
+      </p>
+
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span>Runs entirely in your browser. Your key is sent only to the Archway you point it at.</span>
+    <span>Ask whoever issued your key for the gateway address and its documentation.</span>
+    <a href="https://github.com/AndrewBuildsNYU?tab=repositories&amp;q=archway-">More examples</a>
+  </footer>
+</div>
+<script src="assets/archway.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
