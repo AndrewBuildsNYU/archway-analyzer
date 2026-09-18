@@ -34,7 +34,8 @@ cd archway-analyzer
 Then open `index.html` in a browser. There is no build step, no package manager, and
 nothing to install â€” it is three files and two shared ones.
 
-Pointing the app at a *different* Archway (the base URL field in the key panel) needs
+Pointing the app at a *different* Archway (the `BASE_URL` constant in `assets/archway.js`,
+deliberately not a field in the UI) needs
 that gateway to list this page's origin in `NYU_CORS_ALLOWED_ORIGINS`. Opening the file
 straight from disk sends an origin of `null`, which most gateways reject; if you see
 "This origin is not allowed", serve the folder with any static file server and add that

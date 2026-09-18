@@ -63,6 +63,8 @@
   var countLine = doc.getElementById("source-count");
   var modelSelect = doc.getElementById("model");
   var analyzeBtn = doc.getElementById("analyze");
+  var analyzeSpinner = doc.getElementById("analyze-spinner");
+  var analyzeLabel = doc.getElementById("analyze-label");
   var cancelBtn = doc.getElementById("cancel");
   var loadBtn = doc.getElementById("load-example");
   var statusLine = doc.getElementById("status");
@@ -88,17 +90,21 @@
   function updateCount() {
     var text = sourceBox.value;
     var words = text.split(/\s+/).filter(Boolean).length;
+    // The estimate is chars/4, which is close enough to warn before the gateway
+    // refuses the reservation for a passage larger than the model's window.
+    var long = text.length > 60000;
     var line =
       Archway.formatInt(text.length) +
       " characters · " +
       Archway.formatInt(words) +
-      " words · roughly " +
+      " words · ~" +
       Archway.formatInt(Math.ceil(text.length / 4)) +
       " tokens";
-    // The estimate is chars/4, which is close enough to warn before the gateway
-    // refuses the reservation for a passage larger than the model's window.
-    if (text.length > 60000) line += " — long enough to risk the model's context window";
+    if (long) line += " · long enough to risk the context window";
     countLine.textContent = line;
+    // The count stays grey until it is news, at which point it is the only
+    // coloured thing on the composer.
+    countLine.classList.toggle("is-long", long);
     if (text !== SAMPLE) sampleBadge.classList.add("hidden");
   }
 
@@ -121,14 +127,25 @@
 
   // ------------------------------------------------------------------- keys
 
+  /* An emptied error box is still a flex child of the results stack, so it has
+   * to be hidden as well as cleared or it leaves a gap where nothing is. */
+  function clearError() {
+    Archway.clear(errorBox);
+    errorBox.classList.add("hidden");
+  }
+
   /* One place decides what is clickable: a key is present, models have loaded,
-   * and no call is in flight. Every state change ends here. */
+   * and no call is in flight. Every state change ends here - including the
+   * in-flight affordances, so the spinner can never outlive the request. */
   function refreshControls() {
     sourceBox.disabled = !keyReady;
     loadBtn.disabled = !keyReady || busy;
     modelSelect.disabled = !modelsReady || busy;
     analyzeBtn.disabled = !modelsReady || busy;
     cancelBtn.classList.toggle("hidden", !busy);
+    analyzeSpinner.classList.toggle("hidden", !busy);
+    analyzeBtn.classList.toggle("is-busy", busy);
+    analyzeLabel.textContent = busy ? "Analyzing" : "Analyze passage";
     results.setAttribute("aria-busy", busy ? "true" : "false");
   }
 
@@ -138,8 +155,11 @@
       modelsReady = false;
       Archway.clear(modelSelect);
       modelSelect.appendChild(Archway.el("option", null, "Connect a key to load models"));
-      showEmpty("No analysis yet. Paste some text, or load the sample abstract.");
-      Archway.clear(errorBox);
+      showEmpty(
+        "No analysis yet",
+        "Connect your key, paste a passage above, then press Analyze passage."
+      );
+      clearError();
       Archway.renderReadout(readoutBox, null);
       statusLine.textContent = "";
       markdown = "";
@@ -170,7 +190,7 @@
 
   Archway.mountKeyPanel(doc.getElementById("key-mount"), {
     onReady: function () {
-      Archway.clear(errorBox);
+      clearError();
       setReady(true);
       loadModels();
     },
@@ -264,25 +284,56 @@
 
   // --------------------------------------------------------------- rendering
 
-  function showEmpty(message) {
+  /* Every empty state names the state and the next move. A bare "nothing here"
+   * tells a first-time visitor nothing they could not already see. */
+  function showEmpty(title, hint) {
     Archway.clear(results);
     var card = Archway.el("div", "card");
-    card.appendChild(Archway.el("p", "empty", message));
+    var box = Archway.el("div", "empty");
+    box.appendChild(Archway.el("p", "empty__title", title));
+    if (hint) box.appendChild(Archway.el("p", "empty__hint", hint));
+    card.appendChild(box);
     results.appendChild(card);
   }
 
-  function head(title, extras) {
+  /* The call is non-streaming, so there is nothing to show for several seconds.
+   * Skeleton bars in the shape of the report are the honest stand-in. */
+  function showPending() {
+    Archway.clear(results);
+    var card = Archway.el("div", "card");
+
+    var line = Archway.el("div", "row row--tight");
+    line.appendChild(Archway.el("span", "spinner"));
+    line.appendChild(
+      Archway.el("span", "small muted", "Reading the passage and building the report…")
+    );
+    card.appendChild(line);
+
+    var bars = Archway.el("div", "skeleton");
+    bars.setAttribute("aria-hidden", "true");
+    for (var i = 0; i < 5; i += 1) bars.appendChild(Archway.el("span", "skeleton__bar"));
+    card.appendChild(bars);
+
+    results.appendChild(card);
+  }
+
+  /* A card head with the section's number beside its title. The number is what
+   * turns seven cards into one document. */
+  function head(num, title, extras) {
     var bar = Archway.el("div", "card__head");
-    bar.appendChild(Archway.el("h3", null, title));
+    var group = Archway.el("div", "sec__title");
+    if (num) group.appendChild(Archway.el("span", "sec__num", num));
+    group.appendChild(Archway.el("h3", null, title));
+    bar.appendChild(group);
     (extras || []).forEach(function (node) {
       bar.appendChild(node);
     });
     return bar;
   }
 
-  function proseCard(title, body) {
-    var card = Archway.el("section", "card");
-    card.appendChild(head(title));
+  function proseCard(num, title, body, className) {
+    var card = Archway.el("section", "card" + (className ? " " + className : ""));
+    card.appendChild(head(num, title));
     if (body) {
       card.appendChild(Archway.el("p", "prose", body));
     } else {
@@ -291,104 +342,131 @@
     return card;
   }
 
-  function listCard(title, items, variant, note) {
-    var card = Archway.el("section", "card" + (variant ? " " + variant : ""));
-    var badges = [];
-    if (variant) badges.push(Archway.el("span", "badge badge--warn", "read closely"));
-    card.appendChild(head(title, badges));
-    if (note) card.appendChild(Archway.el("p", "card__note", note));
+  /* opts: { className, badge, note, numbered } */
+  function listCard(num, title, items, opts) {
+    opts = opts || {};
+    var card = Archway.el("section", "card" + (opts.className ? " " + opts.className : ""));
+    card.appendChild(head(num, title, opts.badge ? [opts.badge] : []));
+    if (opts.note) card.appendChild(Archway.el("p", "card__note", opts.note));
 
     if (!items.length) {
       card.appendChild(Archway.el("p", "prose muted", "Nothing returned for this section."));
       return card;
     }
-    var ul = Archway.el("ul", "analysis-list" + (note ? " after-note" : ""));
+
+    // An <ol> for findings so the numbers are real to a screen reader too; the
+    // chip itself is drawn by CSS counters.
+    var list = Archway.el(
+      opts.numbered ? "ol" : "ul",
+      "analysis-list" + (opts.numbered ? " analysis-list--num" : "")
+    );
     items.forEach(function (item) {
-      ul.appendChild(Archway.el("li", null, item));
+      list.appendChild(Archway.el("li", null, item));
     });
-    card.appendChild(ul);
+    card.appendChild(list);
     return card;
   }
 
-  function jargonCard(entries) {
+  function jargonCard(num, entries) {
     var card = Archway.el("section", "card");
-    card.appendChild(head("Jargon, in plain words"));
+    card.appendChild(head(num, "Jargon, in plain words"));
     if (!entries.length) {
       card.appendChild(Archway.el("p", "prose muted", "No technical terms flagged."));
       return card;
     }
     var dl = Archway.el("dl", "gloss");
     entries.forEach(function (entry) {
-      dl.appendChild(Archway.el("dt", null, entry.term));
-      dl.appendChild(Archway.el("dd", null, entry.plain));
+      // <div> inside <dl> is valid and is what keeps a term and its gloss one
+      // grid cell rather than two independently flowing ones.
+      var row = Archway.el("div");
+      row.appendChild(Archway.el("dt", null, entry.term));
+      row.appendChild(Archway.el("dd", null, entry.plain));
+      dl.appendChild(row);
     });
     card.appendChild(dl);
     return card;
   }
 
-  function headerCard(modelId, note) {
-    var card = Archway.el("section", "card");
-    var extras = [Archway.el("span", "badge badge--accent", modelId)];
+  /* The report's title row. Deliberately not a card: it reads as the document
+   * header the sections below it belong to. */
+  function reportHead(modelId, note) {
+    var wrap = Archway.el("header", "report__head");
+
+    var row = Archway.el("div", "row");
+    row.appendChild(Archway.el("h2", null, "Analysis"));
+
+    var model = Archway.el("span", "badge badge--accent spacer", modelId);
+    model.title = "The model alias this analysis was generated with.";
+    row.appendChild(model);
 
     var copy = Archway.el("button", "btn btn--sm", "Copy as Markdown");
     copy.type = "button";
     copy.addEventListener("click", function () {
       copyMarkdown(copy);
     });
-    extras.push(copy);
+    row.appendChild(copy);
 
-    card.appendChild(head("Analysis", extras));
-    card.appendChild(
+    wrap.appendChild(row);
+    wrap.appendChild(
       Archway.el(
         "p",
-        "card__note",
+        "report__note",
         note ||
           "Generated from the passage above. Check anything you plan to cite against the full paper."
       )
     );
-    return card;
+    return wrap;
+  }
+
+  function omissionBadge(count) {
+    return Archway.el(
+      "span",
+      "badge badge--warn",
+      count === 1 ? "1 omission" : count + " omissions"
+    );
   }
 
   function render(analysis, modelId) {
     Archway.clear(results);
-    results.appendChild(headerCard(modelId, null));
-    results.appendChild(proseCard("Central claim", analysis.claim));
+    results.appendChild(reportHead(modelId, null));
+    results.appendChild(proseCard("01", "Central claim", analysis.claim, "card--claim"));
 
     var pair = Archway.el("div", "grid");
-    pair.appendChild(proseCard("Method", analysis.method));
-    pair.appendChild(proseCard("Sample", analysis.sample));
+    pair.appendChild(proseCard("02", "Method", analysis.method));
+    pair.appendChild(proseCard("03", "Sample", analysis.sample));
     results.appendChild(pair);
 
     var lists = Archway.el("div", "grid");
-    lists.appendChild(listCard("Findings as reported", analysis.findings, null, null));
-    lists.appendChild(listCard("Limitations", analysis.limitations, null, null));
+    lists.appendChild(
+      listCard("04", "Findings as reported", analysis.findings, { numbered: true })
+    );
+    lists.appendChild(listCard("05", "Limitations", analysis.limitations, {}));
     results.appendChild(lists);
 
     results.appendChild(
-      listCard(
-        "What the abstract does not say",
-        analysis.unsaid,
-        "card--unsaid",
-        "Expected of a passage like this one, and absent from it. An omission is not proof of a " +
-          "flaw — it is a question to take to the full text."
-      )
+      listCard("06", "What the abstract does not say", analysis.unsaid, {
+        className: "card--unsaid",
+        badge: analysis.unsaid.length ? omissionBadge(analysis.unsaid.length) : null,
+        note:
+          "Expected of a passage like this one, and absent from it. An omission is not proof of " +
+          "a flaw — it is a question to take to the full text.",
+      })
     );
 
-    results.appendChild(jargonCard(analysis.jargon));
+    results.appendChild(jargonCard("07", analysis.jargon));
     results.focus();
   }
 
   function renderRaw(text, modelId) {
     Archway.clear(results);
     results.appendChild(
-      headerCard(
-        modelId,
-        "The model did not return usable JSON, so here is exactly what it said."
-      )
+      reportHead(modelId, "The model did not return usable JSON, so here is exactly what it said.")
     );
 
-    var card = Archway.el("section", "card card--unsaid");
-    card.appendChild(head("Unparsed response", [Archway.el("span", "badge badge--warn", "raw")]));
+    var card = Archway.el("section", "card");
+    card.appendChild(
+      head(null, "Unparsed response", [Archway.el("span", "badge badge--warn", "raw")])
+    );
     card.appendChild(
       Archway.el(
         "p",
@@ -397,7 +475,7 @@
           "produces valid JSON."
       )
     );
-    var pre = Archway.el("pre", "raw after-note");
+    var pre = Archway.el("pre", "raw");
     pre.textContent = text || "(the model returned an empty response)";
     card.appendChild(pre);
     results.appendChild(card);
@@ -517,10 +595,12 @@
     }
 
     var modelId = modelSelect.value;
-    Archway.clear(errorBox);
+    clearError();
     Archway.renderReadout(readoutBox, null);
-    showEmpty("Analyzing…");
-    statusLine.textContent = "Analyzing…";
+    showPending();
+    // The button and the pending card both already say it is working; a third
+    // "Analyzing…" beside them is noise, not reassurance.
+    statusLine.textContent = "";
 
     controller = new AbortController();
     setBusy(true);
@@ -552,11 +632,11 @@
       })
       .catch(function (err) {
         if (err && err.name === "AbortError") {
-          showEmpty("Cancelled. Nothing was analyzed.");
+          showEmpty("Cancelled", "Nothing was analyzed. Press Analyze passage to try again.");
           return;
         }
         statusLine.textContent = "";
-        showEmpty("The analysis did not complete.");
+        showEmpty("The analysis did not complete", "The message above says why.");
         Archway.renderError(errorBox, err);
       })
       .finally(function () {

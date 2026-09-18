@@ -1,14 +1,14 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Archway Paper Analyzer Â· NYU Archway</title>
+<title>Archway Paper Analyzer · NYU Archway</title>
 <meta name="description" content="Paste an abstract or a paper section and get a structured critical breakdown, including what the text conspicuously does not say.">
 <link rel="stylesheet" href="assets/archway.css">
 <script>
   // Pre-paint theme stamp: avoids a light flash for dark-mode users. Inline on
-  // purpose and safe here â€” GitHub Pages sets no CSP. (The Archway's own pages
+  // purpose and safe here — GitHub Pages sets no CSP. (The Archway's own pages
   // cannot do this; script-src 'self' blocks it.)
   try {
     var t = localStorage.getItem("nyu-archway:theme");
@@ -16,90 +16,424 @@
   } catch (e) {}
 </script>
 <style>
-  /* Layout rules this app needs on top of the design system. */
+  /* =====================================================================
+     Page-specific rules, on top of the shared design system.
+
+     Everything here is either layout or a component this app alone owns
+     (the composer, the report, the omissions panel). Nothing in this block
+     re-styles a system control: buttons, selects, inputs and focus rings
+     are the design system's to define, and a local override of one is how
+     five demos stop looking like one product.
+
+       1. Page rhythm
+       2. Intro
+       3. Composer
+       4. Report shell
+       5. Sections & lists
+       6. Omissions - the panel this app exists for
+       7. Glossary & raw reply
+       8. Empty & pending states
+       9. Responsive
+     ===================================================================== */
+
+  /* ------------------------------------------------- 1. Page rhythm */
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-5);
+  }
+
+  /* Focus lands here after a run so a screen reader starts at the report. The
+     region is tabindex="-1" and so is never reachable by keyboard: a ring here
+     would only ever be Chrome guessing wrong about a programmatic focus, and
+     it would be a 2px box drawn around the whole report. */
+  #results:focus,
+  #results:focus-visible {
+    outline: none;
+  }
+
+  /* ------------------------------------------------------ 2. Intro */
+
+  .intro {
+    margin-bottom: var(--sp-6);
+  }
+
+  .intro h1 {
+    max-width: 18ch;
+    margin-bottom: var(--sp-3);
+    text-wrap: balance;
+  }
+
+  .intro .lede {
+    margin-bottom: var(--sp-4);
+  }
+
+  /* --------------------------------------------------- 3. Composer */
+
+  /* A paste target, not a comment box: tall enough that a full abstract
+     lands without scrolling, with prose-sized leading inside it. */
   #source {
-    min-height: 15rem;
+    min-height: 17rem;
+    padding: var(--sp-3) var(--sp-4);
     font-size: var(--fs-sm);
+    line-height: 1.7;
   }
 
-  .count {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .prose {
-    margin: 0;
-    line-height: 1.6;
-  }
-
-  .controls {
-    margin-top: var(--sp-4);
-  }
-
-  .controls .field {
-    flex: 1 1 16rem;
-  }
-
-  .analysis-list {
-    margin: 0;
-    padding-left: 1.15rem;
-    line-height: 1.55;
-  }
-
-  .analysis-list li + li {
+  .composer__meta {
     margin-top: var(--sp-2);
   }
 
-  /* The point of the app: what the abstract leaves out gets its own colour. */
-  .card--unsaid {
-    border-color: var(--warning);
+  /* Reference, not instruction. It sits opposite the shortcut hint, stays on
+     one quiet line, and only takes a colour when the passage is long enough
+     that the model's context window becomes the reader's problem. */
+  /* `.spacer` alone loses here: the system defines `.field__hint { margin: 0 }`
+     later in the sheet at the same specificity, which resets its auto margin. */
+  .composer__meta .count {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
   }
 
-  .gloss {
-    margin: 0;
+  .count.is-long {
+    color: var(--warning-ink);
   }
 
-  .gloss dt {
-    font-weight: 650;
-    font-size: var(--fs-sm);
+  /* The model picker is a single line so it sits level with the buttons it
+     shares the footer with, rather than stacking label over control. */
+  .composer__model {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--sp-2);
+    flex: 1 1 19rem;
+    max-width: 24rem;
   }
 
-  .gloss dd {
-    margin: var(--sp-1) 0 var(--sp-3) 0;
+  .composer__model > label {
+    flex: none;
+  }
+
+  /* A flex item's automatic minimum size is its content, and a <select>'s
+     content is its widest option - so a long model alias would push the
+     footer past the viewport. Layout only; the control's own styling is the
+     design system's. */
+  .composer__model > select {
+    min-width: 0;
+  }
+
+  .composer__status {
+    text-align: right;
+  }
+
+  /* The system spinner is accent-on-surface; on the primary button that is
+     violet on violet. currentColor borrows whichever ink the button is using,
+     so it stays visible in both themes without touching the button itself. */
+  .btn--primary .spinner {
+    border-color: currentColor;
+    border-top-color: transparent;
+    opacity: 0.8;
+  }
+
+  /* A button that is working is not a button that is unavailable. It keeps the
+     `disabled` attribute - a second click must do nothing - but not the
+     dimming, which would half-hide the spinner that is the whole point. */
+  #analyze.is-busy:disabled {
+    opacity: 1;
+    cursor: progress;
+  }
+
+  /* ---------------------------------------------- 4. Report shell */
+
+  /* Not a card: the report's title row reads as a document header, so the
+     cards below it are its sections rather than seven peers. */
+  .report__head {
+    padding-bottom: var(--sp-4);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .report__note {
+    margin: var(--sp-2) 0 0;
+    max-width: 68ch;
     color: var(--ink-2);
     font-size: var(--fs-sm);
     line-height: 1.55;
   }
 
-  .gloss dd:last-child {
-    margin-bottom: 0;
+  /* ---------------------------------------- 5. Sections & lists */
+
+  .sec__title {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
   }
 
-  /* Separates these from a preceding note, which carries no margin of its own.
-     Compound selectors on purpose: .analysis-list, .raw and .field__hint each
-     reset `margin`, and at equal specificity the later rule would win. */
-  .analysis-list.after-note,
-  .raw.after-note,
-  .field__hint.after-note {
-    margin-top: var(--sp-3);
+  .sec__num {
+    font-family: var(--mono);
+    font-size: var(--fs-xs);
+    font-weight: 620;
+    letter-spacing: 0.12em;
+    color: var(--ink-3);
+    line-height: 1.5;
+  }
+
+  .prose {
+    margin: 0;
+    max-width: 68ch;
+    line-height: 1.62;
+  }
+
+  /* The claim is the one sentence everything else qualifies, so it reads a
+     step larger than the sections that follow it. */
+  .card--claim .prose {
+    font-size: var(--fs-md);
+    line-height: 1.55;
+    max-width: 62ch;
+    padding-left: var(--sp-4);
+    border-left: 3px solid var(--accent-border);
+  }
+
+  .analysis-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--sp-3);
+    max-width: 68ch;
+  }
+
+  .analysis-list li {
+    position: relative;
+    padding-left: var(--sp-5);
+    line-height: 1.58;
+  }
+
+  .analysis-list li::before {
+    content: "";
+    position: absolute;
+    left: 0.3rem;
+    top: 0.62em;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--r-full);
+    background: var(--ink-3);
+  }
+
+  /* Findings are numbered because the reader is meant to count them back
+     against the paper. `decimal-leading-zero` matches the section numbers. */
+  .analysis-list--num {
+    counter-reset: finding;
+  }
+
+  .analysis-list--num li {
+    padding-left: 2.25rem;
+  }
+
+  .analysis-list--num li::before {
+    counter-increment: finding;
+    content: counter(finding, decimal-leading-zero);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    left: 0;
+    top: 0.05em;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--ink-2);
+    font-family: var(--mono);
+    font-size: 0.625rem;
+    font-weight: 640;
+  }
+
+  /* ------------------------------------------------ 6. Omissions */
+
+  /* The section the app exists for. It gets the warning colour, a heavier
+     shadow, larger body text and the only ringed markers on the page - it
+     should be the thing a first-time reader's eye lands on. */
+  .card--unsaid {
+    overflow: hidden;
+    border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
+    /* Barely a tint - enough that the panel reads as one object while
+       scrolling past, not so much that it reads as an error. Dropped whole by
+       browsers without color-mix, which leaves the plain card surface. */
+    background: color-mix(in srgb, var(--warning-soft) 45%, var(--surface-1));
+    box-shadow: var(--shadow-2);
+  }
+
+  @supports not (background: color-mix(in srgb, red 50%, blue)) {
+    .card--unsaid {
+      border-color: var(--warning);
+    }
+  }
+
+  .card--unsaid::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: var(--warning);
+  }
+
+  .card--unsaid .analysis-list {
+    gap: var(--sp-4);
+    max-width: 64ch;
+  }
+
+  .card--unsaid .analysis-list li {
+    font-size: var(--fs-md);
+    line-height: 1.55;
+  }
+
+  .card--unsaid .analysis-list li::before {
+    top: 0.58em;
+    background: var(--warning);
+    box-shadow: 0 0 0 3px var(--warning-soft);
+  }
+
+  /* This is the only full-width list on the page, and one column of 64ch
+     leaves the panel half empty at desktop widths - which reads as an
+     afterthought rather than as the finding. Two columns fill it and still
+     land near 55ch of measure. */
+  @media (min-width: 62rem) {
+    .card--unsaid .analysis-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      max-width: none;
+      gap: var(--sp-4) var(--sp-6);
+    }
+  }
+
+  /* ------------------------------------- 7. Glossary & raw reply */
+
+  .gloss {
+    margin: 0;
+    display: grid;
+    gap: var(--sp-4) var(--sp-5);
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  }
+
+  .gloss dt {
+    margin: 0;
+    font-size: var(--fs-sm);
+    font-weight: 650;
+    color: var(--ink-1);
+  }
+
+  .gloss dd {
+    margin: var(--sp-1) 0 0;
+    max-width: 46ch;
+    color: var(--ink-2);
+    font-size: var(--fs-sm);
+    line-height: 1.55;
   }
 
   .raw {
     margin: 0;
-    padding: var(--sp-3);
-    border-radius: var(--r-sm);
+    padding: var(--sp-4);
+    border-radius: var(--r-md);
     background: var(--surface-2);
     border: 1px solid var(--border);
     font-family: var(--mono);
     font-size: var(--fs-xs);
-    line-height: 1.5;
+    line-height: 1.6;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    max-height: 26rem;
+    max-height: 28rem;
     overflow-y: auto;
   }
 
-  #results:focus {
-    outline: none;
+  .disclaimer {
+    margin: 0;
+    padding-left: var(--sp-4);
+    border-left: 2px solid var(--border-strong);
+    max-width: 70ch;
+    /* A caveat people are meant to actually read, so it takes body-text
+       contrast rather than the ink-3 a decorative hint would use. */
+    color: var(--ink-2);
+    font-size: var(--fs-sm);
+    line-height: 1.55;
+  }
+
+  /* ------------------------------------- 8. Empty & pending states */
+
+  .empty__title {
+    margin: 0 0 var(--sp-1);
+    color: var(--ink-2);
+    font-size: var(--fs-base);
+    font-weight: 620;
+  }
+
+  .empty__hint {
+    margin: 0 auto;
+    max-width: 44ch;
+  }
+
+  /* Bars rather than a bare spinner: the shape of what is coming is itself a
+     promise that something is coming. */
+  .skeleton {
+    display: grid;
+    gap: var(--sp-3);
+    margin-top: var(--sp-5);
+    max-width: 68ch;
+  }
+
+  .skeleton__bar {
+    height: 0.5rem;
+    border-radius: var(--r-full);
+    background: var(--surface-3);
+    animation: sk-pulse 1.5s var(--ease) infinite;
+  }
+
+  .skeleton__bar:nth-child(2) {
+    width: 88%;
+  }
+  .skeleton__bar:nth-child(3) {
+    width: 96%;
+  }
+  .skeleton__bar:nth-child(4) {
+    width: 71%;
+  }
+  .skeleton__bar:nth-child(5) {
+    width: 84%;
+  }
+
+  @keyframes sk-pulse {
+    0%,
+    100% {
+      opacity: 0.5;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  /* ------------------------------------------------ 9. Responsive */
+
+  @media (max-width: 38rem) {
+    #source {
+      min-height: 12rem;
+    }
+
+    /* The picker takes its own line, the status takes the next, and the
+       actions split the last - so nothing is ever a 90px-wide button. */
+    .composer__model {
+      flex: 1 1 100%;
+      max-width: none;
+    }
+
+    .composer__status {
+      flex: 1 1 100%;
+      margin-left: 0;
+      text-align: left;
+    }
+
+    .composer__foot .btn {
+      flex: 1 1 8rem;
+    }
+
+    .card--unsaid .analysis-list li {
+      font-size: var(--fs-base);
+    }
   }
 </style>
 </head>
@@ -112,78 +446,92 @@
       <span>NYU Archway example</span>
     </span>
     <button type="button" class="btn btn--sm btn--ghost" id="theme-toggle">Dark mode</button>
-    <a class="btn btn--sm" href="https://github.com/AndrewBuildsNYU/archway-analyzer">Source</a>
+    <a class="btn btn--sm" href="https://github.com/AndrewBuildsNYU/archway-analyzer"
+       target="_blank" rel="noopener">Source</a>
   </header>
 
-  <h1 class="sr-only">Archway Paper Analyzer</h1>
-
-  <p class="lede">
-    Paste an abstract or a section of a paper and get a structured critical breakdown â€” claim,
-    method, findings, limitations, and the things a careful reader would expect it to state and
-    it does not. Demonstrates strict structured output and long-context handling through the Archway.
-  </p>
+  <section class="intro">
+    <h1>Read an abstract like a reviewer</h1>
+    <p class="lede">
+      Paste an abstract or a section of a paper and get a structured critical breakdown — claim,
+      method, sample, findings, limitations, and the things a careful reader would expect it to
+      state and it does not.
+    </p>
+    <div class="row row--tight">
+      <span class="badge">Strict JSON output</span>
+      <span class="badge">Long context</span>
+      <span class="badge">One non-streaming call</span>
+    </div>
+  </section>
 
   <div id="key-mount"></div>
 
   <main id="app">
-    <div class="stack">
 
-      <section class="card">
-        <div class="card__head">
-          <h3>Abstract or section</h3>
-          <button type="button" class="btn btn--sm btn--ghost" id="load-example" disabled>
-            Load an example abstract
-          </button>
+    <section class="card composer">
+      <div class="card__head">
+        <h2>Source passage</h2>
+        <button type="button" class="btn btn--sm btn--ghost" id="load-example" disabled>
+          Load an example abstract
+        </button>
+      </div>
+
+      <div class="field">
+        <label for="source">Abstract, introduction, or results section</label>
+        <textarea id="source" disabled rows="12"
+          placeholder="Paste an abstract, an introduction, or a results section."
+          aria-describedby="source-help source-count"></textarea>
+      </div>
+
+      <div class="row row--tight composer__meta">
+        <span class="field__hint" id="source-help">
+          <span class="mono">Ctrl</span> + <span class="mono">Enter</span> analyzes
+        </span>
+        <span class="field__hint count spacer" id="source-count">0 characters</span>
+      </div>
+
+      <div class="card__foot composer__foot">
+        <div class="field composer__model">
+          <label for="model">Model</label>
+          <select id="model" disabled>
+            <option>Connect a key to load models</option>
+          </select>
         </div>
+        <span class="small muted spacer composer__status" id="status" role="status"></span>
+        <button type="button" class="btn btn--danger hidden" id="cancel">Cancel</button>
+        <button type="button" class="btn btn--primary" id="analyze" disabled>
+          <span class="spinner hidden" id="analyze-spinner" aria-hidden="true"></span>
+          <span id="analyze-label">Analyze passage</span>
+        </button>
+      </div>
+    </section>
 
-        <div class="field">
-          <label for="source">Text to analyze</label>
-          <textarea id="source" disabled
-            placeholder="Paste an abstract, an introduction, or a results section."
-            aria-describedby="source-count"></textarea>
-          <p class="field__hint count" id="source-count">0 characters Â· 0 words</p>
+    <div id="error" class="hidden"></div>
+    <div id="readout" class="readout hidden"></div>
+
+    <section id="results" class="stack" tabindex="-1" aria-live="polite" aria-busy="false">
+      <div class="card">
+        <div class="empty">
+          <p class="empty__title">No analysis yet</p>
+          <p class="empty__hint">
+            Connect your key, paste a passage above, then press Analyze passage.
+          </p>
         </div>
+      </div>
+    </section>
 
-        <div class="row controls">
-          <div class="field">
-            <label for="model">Model</label>
-            <select id="model" disabled>
-              <option>Connect a key to load models</option>
-            </select>
-          </div>
-          <button type="button" class="btn btn--primary" id="analyze" disabled>Analyze</button>
-          <button type="button" class="btn btn--danger hidden" id="cancel">Cancel</button>
-          <span class="small muted" id="status" role="status"></span>
-        </div>
+    <p class="disclaimer">
+      A reading aid, not a substitute for reading the paper. A language model can misread a
+      method, miss a caveat that is stated, or invent one that is not — verify anything you
+      would cite against the full text.
+    </p>
 
-        <p class="field__hint after-note">
-          Press <span class="mono">Ctrl</span> + <span class="mono">Enter</span> in the box to analyze.
-          Longer sections need a model with a large context window.
-        </p>
-      </section>
-
-      <div id="error"></div>
-      <div id="readout" class="readout hidden"></div>
-
-      <section id="results" class="stack" tabindex="-1" aria-live="polite" aria-busy="false">
-        <div class="card">
-          <p class="empty">No analysis yet. Paste some text, or load the sample abstract.</p>
-        </div>
-      </section>
-
-      <p class="card__note">
-        A reading aid, not a substitute for reading the paper. A language model can misread a
-        method, miss a caveat that is stated, or invent one that is not â€” verify anything you
-        would cite against the full text.
-      </p>
-
-    </div>
   </main>
 
   <footer class="footer">
-    <span>Runs entirely in your browser. Your key is sent only to the Archway you point it at.</span>
-    <span>Ask whoever issued your key for the gateway address and its documentation.</span>
-    <a href="https://github.com/AndrewBuildsNYU?tab=repositories&amp;q=archway-">More examples</a>
+    <span>Runs entirely in your browser. Your key is held for this tab only, and is sent only to the Archway.</span>
+    <a class="spacer" href="https://github.com/AndrewBuildsNYU?tab=repositories&amp;q=archway-"
+       target="_blank" rel="noopener">More Archway examples</a>
   </footer>
 </div>
 <script src="assets/archway.js"></script>
