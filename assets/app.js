@@ -611,7 +611,9 @@
       system: SYSTEM,
       messages: [{ role: "user", content: INSTRUCTIONS + "\n\n" + text }],
       maxTokens: 1600,
-      // Low but not zero: the analysis should be stable across runs of the same text.
+      // Low but not zero: the analysis should be stable across runs of the same
+      // text. Dropped for models that only run at their own default - see
+      // Archway.supportsTemperature.
       temperature: 0.2,
       signal: controller.signal,
     })
