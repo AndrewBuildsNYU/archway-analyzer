@@ -440,6 +440,23 @@
    * what a vendor said this page view, deliberately not a catalogue. */
   var temperatureRefused = {};
 
+  /* How hard a thinking model may think, weakest first. The gateway forwards
+   * this to the vendor and drops it for vendors that have no such knob, so an
+   * app can leave it set across a model switch. */
+  var REASONING_EFFORTS = ["minimal", "low", "medium", "high"];
+
+  /* Does offering the control make sense for this model?
+   *
+   * Answered by the catalogue rather than by a list of vendor names here:
+   * /v1/models carries `default_reasoning_effort` exactly where the gateway
+   * pins a thinking budget, so a new thinking vendor lights the control up
+   * without a change to these apps. Takes a model object from listModels(),
+   * not an alias.
+   */
+  function supportsReasoningEffort(modelInfo) {
+    return !!(modelInfo && modelInfo.default_reasoning_effort);
+  }
+
   function supportsTemperature(model) {
     var id = String(model || "").toLowerCase();
     if (!id) return true;
@@ -526,6 +543,14 @@
       supportsTemperature(opts.model)
     ) {
       body.temperature = opts.temperature;
+    }
+    // How hard a thinking model is allowed to think before it answers. Only
+    // ever sent when the caller asks for it: the gateway pins a sane per-vendor
+    // default, and sending one unasked would overwrite it. Whatever is set
+    // here comes out of the same max_tokens budget as the visible answer on
+    // Gemini, so a higher effort wants a higher cap.
+    if (REASONING_EFFORTS.indexOf(opts.reasoningEffort) !== -1) {
+      body.reasoning_effort = opts.reasoningEffort;
     }
     if (opts.stream === true) body.stream_options = { include_usage: true };
     return body;
@@ -1033,6 +1058,8 @@
     streamChat: streamChat,
     chatBody: chatBody,
     supportsTemperature: supportsTemperature,
+    supportsReasoningEffort: supportsReasoningEffort,
+    REASONING_EFFORTS: REASONING_EFFORTS,
 
     mountKeyPanel: mountKeyPanel,
     renderReadout: renderReadout,
