@@ -31,6 +31,8 @@
 
 /* ------------------------------------------------------------- 1. Tokens */
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
   color-scheme: light;
 
@@ -95,14 +97,14 @@
   --sp-7: 3rem;
   --sp-8: 4rem;
 
-  --r-xs: 4px;
-  --r-sm: 7px;
-  --r-md: 11px;
-  --r-lg: 16px;
-  --r-xl: 22px;
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
   --r-full: 999px;
 
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   --fs-xs: 0.6875rem;
   --fs-sm: 0.8125rem;
@@ -114,9 +116,9 @@
 
   /* Two-part shadows: a tight contact shadow plus a soft ambient one. A single
      large blur reads as a sticker; the pair reads as a surface. */
-  --shadow-1: 0 1px 2px rgba(11, 11, 11, 0.05), 0 1px 1px rgba(11, 11, 11, 0.03);
-  --shadow-2: 0 1px 2px rgba(11, 11, 11, 0.05), 0 6px 18px -6px rgba(11, 11, 11, 0.10);
-  --shadow-3: 0 2px 4px rgba(11, 11, 11, 0.06), 0 22px 48px -12px rgba(11, 11, 11, 0.20);
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.03);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
 
   --ring: 0 0 0 3px var(--accent-glow);
 
@@ -174,9 +176,9 @@
 
     --focus: #d3b2ee;
 
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
-    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px -6px rgba(0, 0, 0, 0.6);
-    --shadow-3: 0 2px 4px rgba(0, 0, 0, 0.5), 0 22px 48px -12px rgba(0, 0, 0, 0.75);
+    --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.4);
+    --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -473,6 +475,13 @@ kbd {
   border-radius: var(--r-lg);
   padding: var(--sp-5);
   box-shadow: var(--shadow-1);
+  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-2);
+  border-color: var(--border-strong);
 }
 
 .card--flush {
