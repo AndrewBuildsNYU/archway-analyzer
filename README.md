@@ -72,6 +72,7 @@ Model output is untrusted text, so every value from the response is written with
 | `assets/app.js` | The prompt, the defensive JSON parse, the rendering, the Markdown export |
 | `assets/archway.js` | Shared Archway client: key panel, model list, `chat()`, readout, errors |
 | `assets/archway.css` | Shared design system: tokens, components, dark mode |
+| `assets/fonts/` | Inter, the interface typeface, self-hosted under the SIL Open Font License (`OFL.txt`) |
 
 The two `archway.*` files are copied in from the examples collection and are identical
 across every Archway example.

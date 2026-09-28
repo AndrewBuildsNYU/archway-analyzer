@@ -106,6 +106,38 @@
     while (node && node.firstChild) node.removeChild(node.firstChild);
   }
 
+  /* A 24x24 stroked line icon from path data. Built node by node for the same
+   * reason as everything else here: there is no innerHTML in this file. */
+  var SVG_NS = "http://www.w3.org/2000/svg";
+
+  function icon(className, paths) {
+    var svg = global.document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.8");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    if (className) svg.setAttribute("class", className);
+    paths.forEach(function (d) {
+      var path = global.document.createElementNS(SVG_NS, "path");
+      path.setAttribute("d", d);
+      svg.appendChild(path);
+    });
+    return svg;
+  }
+
+  var ICON_KEY = [
+    "M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4",
+  ];
+  var ICON_WARN = [
+    "M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z",
+    "M12 9v4",
+    "M12 17h.01",
+  ];
+
   /* A vendor may send `content` as a string, as null, or as an array of typed
    * parts. Every call site wants a string. */
   function flattenContent(content) {
@@ -721,15 +753,14 @@
     var head = el("div", "keypanel__head");
     var lock = el("span", "keypanel__icon");
     lock.setAttribute("aria-hidden", "true");
-    lock.textContent = "\u2022";
+    lock.appendChild(icon(null, ICON_KEY));
     var headText = el("div");
     headText.appendChild(el("h2", "keypanel__title", "Connect your Archway key"));
     headText.appendChild(
       el(
         "p",
         "keypanel__sub",
-        "Paste the key issued to you. Every request this page makes is signed with it and " +
-          "metered against your own quota."
+        "Every request this page makes is signed with it and metered against your own quota."
       )
     );
     head.appendChild(lock);
@@ -758,6 +789,13 @@
     keyWrap.appendChild(keyInput);
     keyWrap.appendChild(peek);
 
+    // The input and its button share a row: the whole ask is one line.
+    var keyRow = el("div", "keyrow");
+    var connect = el("button", "btn btn--primary", "Connect");
+    connect.type = "button";
+    keyRow.appendChild(keyWrap);
+    keyRow.appendChild(connect);
+
     var keyHint = el(
       "p",
       "field__hint",
@@ -766,21 +804,15 @@
     keyHint.id = "archway-key-hint";
 
     keyField.appendChild(keyLabel);
-    keyField.appendChild(keyWrap);
+    keyField.appendChild(keyRow);
     keyField.appendChild(keyHint);
 
-    var actions = el("div", "keypanel__actions");
-    var connect = el("button", "btn btn--primary", "Connect");
-    connect.type = "button";
     var status = el("span", "keypanel__status");
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
-    actions.appendChild(connect);
-    actions.appendChild(status);
 
     var warn = el("div", "keypanel__warn");
-    var warnMark = el("span", "keypanel__warn-mark", "!");
-    warnMark.setAttribute("aria-hidden", "true");
+    var warnMark = icon("keypanel__warn-mark", ICON_WARN);
     var warnText = el("p", "keypanel__warn-text");
     warnText.appendChild(el("strong", null, "Use a low-quota key. "));
     warnText.appendChild(
@@ -795,27 +827,31 @@
 
     panel.appendChild(head);
     panel.appendChild(keyField);
-    panel.appendChild(actions);
+    panel.appendChild(status);
     panel.appendChild(warn);
 
     // --- the collapsed bar --------------------------------------------
+    var barRow = el("div", "keybar__row");
     var dot = el("span", "keybar__dot");
     dot.setAttribute("aria-hidden", "true");
     var barText = el("span", "keybar__text");
+    barText.appendChild(el("span", null, "Connected"));
+    var barPrefix = el("span", "keybar__prefix");
+    barText.appendChild(barPrefix);
     // Filled in asynchronously once the gateway says what this key reaches.
-    var access = el("span", "keybar__access");
+    var access = el("div", "keybar__access");
     access.setAttribute("role", "status");
     access.setAttribute("aria-live", "polite");
     var change = el("button", "btn btn--sm btn--ghost", "Change");
     change.type = "button";
     var forget = el("button", "btn btn--sm btn--ghost keybar__forget", "Forget key");
     forget.type = "button";
-    bar.appendChild(dot);
-    bar.appendChild(barText);
+    barRow.appendChild(dot);
+    barRow.appendChild(barText);
+    barRow.appendChild(change);
+    barRow.appendChild(forget);
+    bar.appendChild(barRow);
     bar.appendChild(access);
-    bar.appendChild(el("span", "spacer"));
-    bar.appendChild(change);
-    bar.appendChild(forget);
 
     mountNode.appendChild(panel);
     mountNode.appendChild(bar);
@@ -842,7 +878,9 @@
       describeKey().then(
         function (info) {
           clear(access);
-          (info.providers || []).forEach(function (provider) {
+          var providers = info.providers || [];
+          if (providers.length) access.appendChild(el("span", "keybar__label", "Reaches"));
+          providers.forEach(function (provider) {
             var tone = "";
             if (provider.mock) tone = " badge--warn";
             else if (provider.quota && provider.quota.exhausted) tone = " badge--bad";
@@ -862,7 +900,7 @@
       // The prefix only - enough to tell two keys apart, not enough to use one.
       // The gateway address is deliberately absent: it is not the visitor's to
       // know or to change.
-      barText.textContent = "Connected \u00b7 " + getKey().slice(0, 14) + "\u2026";
+      barPrefix.textContent = getKey().slice(0, 14) + "\u2026";
       panel.classList.add("hidden");
       bar.classList.remove("hidden");
       paintAccess();
@@ -973,10 +1011,23 @@
         : "light";
     }
 
+    // An icon toggle carries its own sun and moon and is told which theme is in
+    // force, so CSS can show the right one. A text button is relabelled.
+    var iconOnly = !!button.querySelector("svg");
+
     function paint() {
       var now = current();
-      button.textContent = now === "dark" ? "Light mode" : "Dark mode";
-      button.setAttribute("aria-label", "Switch to " + (now === "dark" ? "light" : "dark") + " mode");
+      var label = "Switch to " + (now === "dark" ? "light" : "dark") + " mode";
+      button.setAttribute("data-current", now);
+      button.setAttribute("aria-label", label);
+      button.title = label;
+      if (!iconOnly) button.textContent = now === "dark" ? "Light mode" : "Dark mode";
+    }
+
+    // With no saved choice the OS decides, and it can change under an open tab.
+    if (global.matchMedia) {
+      var scheme = global.matchMedia("(prefers-color-scheme: dark)");
+      if (scheme.addEventListener) scheme.addEventListener("change", paint);
     }
 
     button.addEventListener("click", function () {
